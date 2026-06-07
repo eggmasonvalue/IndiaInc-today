@@ -18,3 +18,5 @@ htmlcov/
 *.log
 .idea/
 .vscode/
+nse_cookies_*.json
+

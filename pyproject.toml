@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.4.1",
     "nse[server]>=3.0.0",
+    "requests>=2.34.2",
     "tenacity>=9.1.4",
 ]
 

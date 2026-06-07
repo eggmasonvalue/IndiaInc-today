@@ -1,0 +1,70 @@
+name: IndiaInc Today Daily Digest
+
+on:
+  schedule:
+    - cron: '20 18 * * *'  # 11:50 PM IST (6:20 PM UTC), every day
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Date (DD-MM-YYYY)'
+        required: false
+        type: string
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run NSE Mainboard digest
+        run: |
+          ARGS="--exchange nse-main"
+          if [ -n "${{ inputs.date }}" ]; then
+            ARGS="$ARGS --date ${{ inputs.date }}"
+          fi
+          uv run indiainc-today digest $ARGS
+
+      - name: Upload NSE Main output
+        uses: actions/upload-artifact@v4
+        with:
+          name: nse-main-output
+          path: nse_main_output.json
+          retention-days: 7
+
+      - name: Send NSE Mainboard to Discord
+        run: uv run python scripts/send_discord_webhook.py nse_main_output.json --exchange "NSE Mainboard"
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        continue-on-error: true
+
+      - name: Run NSE SME digest
+        run: |
+          ARGS="--exchange nse-sme"
+          if [ -n "${{ inputs.date }}" ]; then
+            ARGS="$ARGS --date ${{ inputs.date }}"
+          fi
+          uv run indiainc-today digest $ARGS
+
+      - name: Upload NSE SME output
+        uses: actions/upload-artifact@v4
+        with:
+          name: nse-sme-output
+          path: nse_sme_output.json
+          retention-days: 7
+
+      - name: Send NSE SME to Discord
+        run: uv run python scripts/send_discord_webhook.py nse_sme_output.json --exchange "NSE SME"
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        continue-on-error: true

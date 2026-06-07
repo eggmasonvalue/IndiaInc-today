@@ -1,21 +1,27 @@
 """Fetch multiple Reg30 samples across different event types.
 Run from KnowledgeLM dir: uv run python reg30_samples.py
 """
+
 from nse import NSE
-import json, time
+import time
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 
 n = NSE(".", server=True)
 base = n.base_url + "/XBRL-announcements"
 
-params = {"index": "equities", "type": "Reg30", "from_date": "20-05-2026", "to_date": "06-06-2026"}
+params = {
+    "index": "equities",
+    "type": "Reg30",
+    "from_date": "20-05-2026",
+    "to_date": "06-06-2026",
+}
 resp = n._req(base, params=params)
 data = resp.json()
 
 print(f"Total Reg30 filings: {len(data)}\n")
 
 # Group by eventType
-from collections import defaultdict
 by_event = defaultdict(list)
 for d in data:
     et = d.get("eventType", "unknown")
@@ -44,9 +50,9 @@ for et, items in by_event.items():
 print(f"\nFetching XML for {len(samples)} unique event types...\n")
 
 for et, filing in samples:
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"EVENT: {et}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"  Company: {filing.get('companyName')} ({filing.get('symbol')})")
     print(f"  AppId: {filing.get('appId')}")
     print(f"  Type: {filing.get('typeOfAnn')}")
