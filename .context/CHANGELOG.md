@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [0.2.0] - 2026-06-09
+### Added
+- Created remote GitHub repository `IndiaInc-today` using the GitHub CLI and pushed the local `main` branch.
+
 ## [0.1.0] - 2026-06-07
 ### Added
 - Initial project scaffold with `uv`, `pytest`, `pytest-cov`, and `ruff`.
