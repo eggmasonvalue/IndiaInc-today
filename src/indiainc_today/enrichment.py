@@ -79,6 +79,8 @@ class StockEnricher:
             "current_mkt_cap_cr": None,
             "week_52_high": None,
             "week_52_low": None,
+            "p_change": None,
+            "previous_close": None,
             "company_name": None,
         }
 
@@ -93,6 +95,8 @@ class StockEnricher:
                 ).get("lastPrice")
                 details["week_52_high"] = price_info.get("yearHigh")
                 details["week_52_low"] = price_info.get("yearLow")
+                details["p_change"] = price_info.get("pChange")
+                details["previous_close"] = price_info.get("previousClose")
 
                 trade_info = quote.get("tradeInfo", {})
                 issued_size = trade_info.get("issuedSize")

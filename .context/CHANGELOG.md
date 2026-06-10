@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [0.3.0] - 2026-06-10
+### Added
+- Feature flag `PARSE_XBRL_XML` in `config.py` (default: `False`) to disable/enable downloading and parsing of raw XBRL XML documents.
+- Extraction of percent price change (`pChange`) and previous close (`previousClose`) in `enrichment.py` to enable real-time trend monitoring.
+- Completely redesigned Discord delivery format in `scripts/send_discord_webhook.py` to match the premium FirstFilings aesthetic:
+  - Color coding based on filing type category (using category color themes).
+  - 52-week price range progress bar (`▓▓▓▓▓░░░░░`).
+  - Formatted LTP and percent change with trend arrows (📈/📉) for historical digests, and only LTP for today's digests.
+  - Highlighting company industry classifications.
+- Added conditional price field formatting:
+  - If run for today's digest (`today == digest_date`), only LTP is shown.
+  - If run historically (`today > digest_date`), both prices (previous close → LTP) and the percentage change are displayed.
+- Added comprehensive unit tests in `tests/test_webhook.py` to cover all formatting, range bar, and embed-building helpers.
+
 ## [0.2.0] - 2026-06-09
 ### Added
 - Created remote GitHub repository `IndiaInc-today` using the GitHub CLI and pushed the local `main` branch.

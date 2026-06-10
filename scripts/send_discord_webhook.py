@@ -7,13 +7,19 @@ import os
 import re
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 import requests
 
 # Discord message limits
 MAX_EMBEDS_PER_MESSAGE = 10
 MAX_TOTAL_CHARS = 5800
 MAX_FIELD_VALUE = 1024
+
+# ── Colours ────────────────────────────────────────────────────────
+COLOR_GAIN = 0x2ECC71     # green
+COLOR_LOSS = 0xE74C3C     # red
+COLOR_NEUTRAL = 0x95A5A6  # grey
+COLOR_HEADER = 0x3498DB   # blue
 
 # Category details (Emoji, Color)
 CATEGORY_THEMES: Dict[str, Tuple[str, int]] = {
@@ -27,6 +33,60 @@ CATEGORY_THEMES: Dict[str, Tuple[str, int]] = {
     "One Time Settlement": ("💸", 0x1ABC9C),  # Turquoise
     "Others": ("📋", 0x95A5A6),  # Light Grey
 }
+
+
+def _fmt_price(p: Any) -> str:
+    """Format price as currency with separator."""
+    if p is None:
+        return "N/A"
+    return f"₹{p:,.2f}" if isinstance(p, (int, float)) else str(p)
+
+
+def _range_bar(low: float, high: float, current: float, width: int = 10) -> Optional[Tuple[str, float]]:
+    """Text-based progress bar for 52-week range position."""
+    if not all(isinstance(v, (int, float)) for v in (low, high, current)):
+        return None
+    if high <= low:
+        return None
+    pct = max(0.0, min(100.0, ((current - low) / (high - low)) * 100))
+    filled = round(pct / 100 * width)
+    bar = "▓" * filled + "░" * (width - filled)
+    return bar, pct
+
+
+def _format_price_field(curr_price: Any, p_change: Any, prev_close: Any, is_historical: bool = False) -> str:
+    """Format Price field. If historical, shows change from previous close. If today's, just LTP."""
+    if not is_historical:
+        return _fmt_price(curr_price)
+
+    parts = []
+    if prev_close is not None and curr_price is not None:
+        parts.append(f"{_fmt_price(prev_close)} → {_fmt_price(curr_price)}")
+    elif curr_price is not None:
+        parts.append(_fmt_price(curr_price))
+    
+    # Compute or display percentage change
+    change_val = None
+    if p_change is not None:
+        try:
+            change_val = float(p_change)
+        except ValueError:
+            pass
+    elif prev_close is not None and curr_price is not None:
+        try:
+            pc = float(prev_close)
+            cc = float(curr_price)
+            if pc > 0:
+                change_val = ((cc - pc) / pc) * 100
+        except ValueError:
+            pass
+
+    if change_val is not None:
+        sign = "+" if change_val >= 0 else ""
+        arrow = "📈" if change_val >= 0 else "📉"
+        parts.append(f"{arrow} {sign}{change_val:.2f}%")
+
+    return "\n".join(parts) if parts else "N/A"
 
 
 def format_money(val: Any) -> str:
@@ -293,29 +353,24 @@ def build_header_embed(
     total_ann: int,
     category_counts: Dict[str, int],
 ) -> Dict[str, Any]:
-    """Build summary header embed."""
-    summary_parts = []
-    for cat, count in category_counts.items():
-        emoji, _ = CATEGORY_THEMES.get(cat, CATEGORY_THEMES["Others"])
-        summary_parts.append(f"{emoji} **{cat}**: {count}")
-
-    description = (
-        f"**{total_ann}** key corporate announcement(s) detected.\n\n"
-        + "\n".join(summary_parts)
-    )
+    """Build summary header embed in FirstFilings layout style."""
+    cat_list = "  •  ".join(f"**{c}**" for c in sorted(category_counts.keys()))
 
     embed = {
-        "title": f"📢  {exchange_name} — Enriched Digest",
-        "color": 0x3498DB,  # Blue header
-        "description": description,
+        "title": f"📋  {exchange_name}",
+        "color": COLOR_HEADER,
+        "description": (
+            f"**{total_ann}** new filing(s) detected.\n"
+            f"{cat_list}"
+        ),
         "footer": {"text": f"IndiaInc Today  •  {date_str}"},
         "timestamp": datetime.utcnow().isoformat(),
     }
     return embed
 
 
-def build_filing_embed(filing: Dict[str, Any], category: str) -> Dict[str, Any]:
-    """Build rich embed for a single announcement filing."""
+def build_filing_embed(filing: Dict[str, Any], category: str, is_historical: bool = False) -> Dict[str, Any]:
+    """Build a beautifully formatted rich embed matching FirstFilings style."""
     symbol = filing.get("symbol", "UNKNOWN")
     company_name = filing.get("company_name") or "Unknown Company"
     event_type = filing.get("event_type") or "Corporate Announcement"
@@ -325,45 +380,74 @@ def build_filing_embed(filing: Dict[str, Any], category: str) -> Dict[str, Any]:
     enrichment = filing.get("enrichment") or {}
     xbrl_data = filing.get("xbrl_data") or {}
 
-    emoji, color = CATEGORY_THEMES.get(category, CATEGORY_THEMES["Others"])
+    emoji, fallback_color = CATEGORY_THEMES.get(category, CATEGORY_THEMES["Others"])
 
     # Enrichment details
     current_price = enrichment.get("current_price")
     mkt_cap = enrichment.get("current_mkt_cap_cr")
     week_52_high = enrichment.get("week_52_high")
     week_52_low = enrichment.get("week_52_low")
+    p_change = enrichment.get("p_change")
+    prev_close = enrichment.get("previous_close")
     industry = enrichment.get("industry")
 
-    # Header details
-    meta_parts = []
+    color = fallback_color
+
+    # Description layout
+    desc_lines = []
     if industry:
-        meta_parts.append(f"*{industry}*")
-    if current_price:
-        meta_parts.append(f"**LTP**: ₹{current_price:,.2f}")
-    if mkt_cap:
-        meta_parts.append(f"**Mkt Cap**: ₹{mkt_cap:,.2f} Cr")
-    if week_52_high and week_52_low:
-        meta_parts.append(f"**52W**: ₹{week_52_low:,.2f} - ₹{week_52_high:,.2f}")
-
-    description_header = (
-        " • ".join(meta_parts) if meta_parts else "*No market data available*"
-    )
-
-    # Format the XBRL body fields
-    body_text = build_fields_summary(xbrl_data)
-
-    # Embed URLs (prefer human-readable iXBRL)
-    url_to_use = ixbrl_url or xbrl_url
+        desc_lines.append(f"*{industry}*")
+    desc_lines.append(f"📋 **Event**: {event_type}")
 
     embed = {
-        "title": f"{emoji} {symbol} — {company_name}",
-        "description": f"{description_header}\n\n📋 **Event**: {event_type}\n\n{body_text}",
+        "title": company_name,
         "color": color,
+        "description": "\n\n".join(desc_lines),
+        "fields": [],
         "footer": {"text": f"{category}  •  {broadcast_dt}"},
     }
 
+    url_to_use = ixbrl_url or xbrl_url
     if url_to_use:
         embed["url"] = url_to_use
+
+    # Symbol Field
+    embed["fields"].append(
+        {"name": "Symbol", "value": f"`{symbol}`", "inline": True}
+    )
+
+    # Price Field
+    price_val = _format_price_field(current_price, p_change, prev_close, is_historical)
+    embed["fields"].append(
+        {"name": "Price", "value": price_val, "inline": True}
+    )
+
+    # Market Cap Field
+    if mkt_cap is not None:
+        mkt_str = f"₹{mkt_cap:,.2f} Cr"
+        embed["fields"].append(
+            {"name": "Market Cap", "value": mkt_str, "inline": True}
+        )
+
+    # 52W Range Field
+    if week_52_low is not None or week_52_high is not None:
+        range_parts = [f"{_fmt_price(week_52_low)} — {_fmt_price(week_52_high)}"]
+        if current_price is not None:
+            bar_result = _range_bar(week_52_low, week_52_high, current_price)
+            if bar_result:
+                bar, pct = bar_result
+                range_parts.append(f"`{bar}` {pct:.0f}%")
+        embed["fields"].append(
+            {"name": "52W Range", "value": "\n".join(range_parts), "inline": True}
+        )
+
+    # Conditionally append parsed XBRL summary if present (from feature flag = True)
+    if xbrl_data:
+        xbrl_summary = build_fields_summary(xbrl_data)
+        if xbrl_summary and xbrl_summary != "*No structured XBRL data parsed.*":
+            embed["fields"].append(
+                {"name": "XBRL Details", "value": xbrl_summary, "inline": False}
+            )
 
     return embed
 
@@ -419,10 +503,20 @@ def process_digest_file(file_path: str) -> List[Dict[str, Any]]:
     # Header embed
     embeds = [build_header_embed(exchange, date_str, total_ann, category_counts)]
 
+    is_historical = False
+    if date_str:
+        try:
+            digest_date = datetime.strptime(date_str, "%d-%m-%Y").date()
+            today_date = datetime.now().date()
+            if today_date > digest_date:
+                is_historical = True
+        except Exception:
+            pass
+
     # Filing embeds
     for category in sorted(category_data.keys()):
         for filing in category_data[category]:
-            embeds.append(build_filing_embed(filing, category))
+            embeds.append(build_filing_embed(filing, category, is_historical))
 
     return embeds
 

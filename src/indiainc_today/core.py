@@ -78,13 +78,17 @@ def generate_digest(
         xbrl_url = item.get("xbrl") or item.get("attachment")
         ixbrl_url = item.get("ixbrl")
 
-        # Download & parse XBRL XML if available
+        # Download & parse XBRL XML if available and feature flag is enabled
         xbrl_data = {}
-        if xbrl_url and xbrl_url.lower().endswith(".xml"):
+        if config.PARSE_XBRL_XML and xbrl_url and xbrl_url.lower().endswith(".xml"):
             logger.info(f"[{idx + 1}/{len(raw_listings)}] Parsing XBRL for {symbol}")
             xbrl_data = parser.download_and_parse(xbrl_url)
             # Polite pause to avoid rate limits
             time.sleep(config.REQUEST_DELAY)
+        elif xbrl_url and xbrl_url.lower().endswith(".xml"):
+            logger.info(
+                f"[{idx + 1}/{len(raw_listings)}] Skipping XBRL parsing for {symbol} (feature flag disabled)"
+            )
         else:
             logger.warning(
                 f"[{idx + 1}/{len(raw_listings)}] No valid XBRL XML URL found for {symbol}"
@@ -102,6 +106,8 @@ def generate_digest(
                     "current_mkt_cap_cr": stock_details.get("current_mkt_cap_cr"),
                     "week_52_high": stock_details.get("week_52_high"),
                     "week_52_low": stock_details.get("week_52_low"),
+                    "p_change": stock_details.get("p_change"),
+                    "previous_close": stock_details.get("previous_close"),
                     "industry": industry,
                 }
 

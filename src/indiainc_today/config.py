@@ -20,6 +20,10 @@ LOG_FILE: str = "indiainc_today.log"
 # Supported exchange segments
 EXCHANGE_SEGMENTS: List[str] = ["nse-main", "nse-sme"]
 
+# Feature Flags
+PARSE_XBRL_XML: bool = False
+
+
 # NSE XBRL Type Codes mapping to descriptive names
 XBRL_TYPE_CODES: Dict[str, str] = {
     "Reg30": "Restructuring (Reg 30)",
