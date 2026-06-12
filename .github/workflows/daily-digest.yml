@@ -2,7 +2,7 @@ name: IndiaInc Today Daily Digest
 
 on:
   schedule:
-    - cron: '20 18 * * *'  # 11:50 PM IST (6:20 PM UTC), every day
+    - cron: '23 18 * * *'  # 11:53 PM IST (6:23 PM UTC), every day
   workflow_dispatch:
     inputs:
       date:
